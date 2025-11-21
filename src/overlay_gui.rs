@@ -118,74 +118,64 @@ pub fn show_overlay(ctx: &egui::Context) {
                                     // Position it below the selection
                                     let window_pos = local_rect.max + egui::vec2(0.0, 10.0);
                                     
-                                    // Use a child ui or just a window? 
-                                    // Since we are inside a CentralPanel, we can use a Window or Area.
-                                    // Area is better for custom positioning.
-                                    let area_id = egui::Id::new("result_area").with(id);
-                                    
-                                    egui::Area::new(area_id)
-                                        .fixed_pos(window_pos)
-                                        .constrain(true) // Keep on screen
+                                    let mut is_open = true;
+                                    let window_title = match item.status {
+                                        crate::TranslationStatus::Translating => "Translating...",
+                                        crate::TranslationStatus::Success => "Translation",
+                                        crate::TranslationStatus::Error => "Error",
+                                    };
+
+                                    egui::Window::new(window_title)
+                                        .id(egui::Id::new(item.id))
+                                        .default_pos(window_pos)
+                                        .open(&mut is_open)
+                                        .frame(egui::Frame::window(&ctx.style())
+                                            .fill(egui::Color32::from_black_alpha(220))
+                                            .rounding(8.0)
+                                            .shadow(eframe::epaint::Shadow::small_dark())
+                                            .inner_margin(12.0)
+                                        )
                                         .show(ctx, |ui| {
-                                            egui::Frame::none()
-                                                .fill(egui::Color32::from_black_alpha(220))
-                                                .rounding(8.0)
-                                                .shadow(eframe::epaint::Shadow::small_dark())
-                                                .inner_margin(12.0)
-                                                .show(ui, |ui| {
-                                                    ui.set_max_width(400.0);
-                                                    
-                                                    // Header: Status + Close Button
-                                                    ui.horizontal(|ui| {
-                                                        match item.status {
-                                                            crate::TranslationStatus::Translating => {
-                                                                ui.spinner();
-                                                                ui.label("Translating...");
-                                                            },
-                                                            crate::TranslationStatus::Error => {
-                                                                ui.label(egui::RichText::new("Error").color(egui::Color32::RED));
-                                                            },
-                                                            crate::TranslationStatus::Success => {
-                                                                ui.label(egui::RichText::new("Translation").strong());
-                                                            }
-                                                        }
-                                                        
-                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                            if ui.button("❌").clicked() {
-                                                                items_to_remove.push(id);
-                                                            }
-                                                        });
-                                                    });
-                                                    
-                                                    ui.separator();
-
-                                                    // Content
-                                                    if !item.text.is_empty() {
-                                                        ui.add(
-                                                            egui::Label::new(&item.text)
-                                                                .wrap(true)
-                                                                .selectable(true)
-                                                        );
-                                                        
-                                                        ui.add_space(8.0);
-                                                        
-                                                        // Copy Button
-                                                        let show_copied_feedback = if let Some(time) = item.copy_feedback_time {
-                                                            time.elapsed().as_secs() < 2
-                                                        } else {
-                                                            false
-                                                        };
-
-                                                        if show_copied_feedback {
-                                                            ui.label(egui::RichText::new("✅ Copied!").color(egui::Color32::GREEN));
-                                                        } else {
-                                                            if ui.button("📋 Copy to Clipboard").clicked() {
-                                                                copy_action = Some((item.text.clone(), id));
-                                                            }
-                                                        }
-                                                    }
+                                            ui.set_max_width(400.0);
+                                            
+                                            // Content
+                                            if let crate::TranslationStatus::Translating = item.status {
+                                                ui.horizontal(|ui| {
+                                                    ui.spinner();
+                                                    ui.label("Processing...");
                                                 });
+                                                ui.add_space(8.0);
+                                            }
+
+                                            if !item.text.is_empty() {
+                                                ui.add(
+                                                    egui::Label::new(&item.text)
+                                                        .wrap(true)
+                                                        .selectable(true)
+                                                );
+                                                
+                                                ui.add_space(8.0);
+                                                
+                                                // Copy Button
+                                                let show_copied_feedback = if let Some(time) = item.copy_feedback_time {
+                                                    time.elapsed().as_secs() < 2
+                                                } else {
+                                                    false
+                                                };
+
+                                                if show_copied_feedback {
+                                                    ui.label(egui::RichText::new("✅ Copied!").color(egui::Color32::GREEN));
+                                                } else {
+                                                    if ui.button("📋 Copy to Clipboard").clicked() {
+                                                        copy_action = Some((item.text.clone(), id));
+                                                    }
+                                                }
+                                            }
                                         });
+                                    
+                                    if !is_open {
+                                        items_to_remove.push(id);
+                                    }
                                 }
                             }
                         }
