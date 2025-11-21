@@ -5,11 +5,20 @@ use tray_icon::{TrayIcon, TrayIconEvent, MouseButton, menu::{Menu, MenuEvent}};
 use auto_launch::AutoLaunch;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+#[cfg(target_os = "windows")]
 use windows::core::*;
+
+#[cfg(target_os = "macos")]
+use crate::overlay_gui;
 
 enum UserEvent {
     Tray(TrayIconEvent),
@@ -19,31 +28,68 @@ enum UserEvent {
 // --- Font Configuration ---
 pub fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    let viet_font_name = "segoe_ui";
-    let viet_font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
-    let viet_fallback_path = "C:\\Windows\\Fonts\\arial.ttf";
-    let viet_data = std::fs::read(viet_font_path).or_else(|_| std::fs::read(viet_fallback_path));
+    
+    // Windows specific font paths - TODO: Add macOS fonts
+    #[cfg(target_os = "windows")]
+    {
+        let viet_font_name = "segoe_ui";
+        let viet_font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
+        let viet_fallback_path = "C:\\Windows\\Fonts\\arial.ttf";
+        let viet_data = std::fs::read(viet_font_path).or_else(|_| std::fs::read(viet_fallback_path));
 
-    let korean_font_name = "malgun_gothic";
-    let korean_font_path = "C:\\Windows\\Fonts\\malgun.ttf";
-    let korean_data = std::fs::read(korean_font_path);
+        let korean_font_name = "malgun_gothic";
+        let korean_font_path = "C:\\Windows\\Fonts\\malgun.ttf";
+        let korean_data = std::fs::read(korean_font_path);
 
-    if let Ok(data) = viet_data {
-        fonts.font_data.insert(viet_font_name.to_owned(), egui::FontData::from_owned(data));
-        if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Proportional) { vec.insert(0, viet_font_name.to_owned()); }
-        if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) { vec.insert(0, viet_font_name.to_owned()); }
-    }
-    if let Ok(data) = korean_data {
-        fonts.font_data.insert(korean_font_name.to_owned(), egui::FontData::from_owned(data));
-        if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Proportional) { 
-            let idx = if vec.contains(&viet_font_name.to_string()) { 1 } else { 0 };
-            vec.insert(idx, korean_font_name.to_owned()); 
+        if let Ok(data) = viet_data {
+            fonts.font_data.insert(viet_font_name.to_owned(), egui::FontData::from_owned(data));
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Proportional) { vec.insert(0, viet_font_name.to_owned()); }
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) { vec.insert(0, viet_font_name.to_owned()); }
         }
-        if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) { 
-             let idx = if vec.contains(&viet_font_name.to_string()) { 1 } else { 0 };
-             vec.insert(idx, korean_font_name.to_owned()); 
+        if let Ok(data) = korean_data {
+            fonts.font_data.insert(korean_font_name.to_owned(), egui::FontData::from_owned(data));
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Proportional) { 
+                let idx = if vec.contains(&viet_font_name.to_string()) { 1 } else { 0 };
+                vec.insert(idx, korean_font_name.to_owned()); 
+            }
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) { 
+                 let idx = if vec.contains(&viet_font_name.to_string()) { 1 } else { 0 };
+                 vec.insert(idx, korean_font_name.to_owned()); 
+            }
         }
     }
+
+    // macOS specific font paths
+    #[cfg(target_os = "macos")]
+    {
+        let font_name = "arial";
+        // Try Arial Unicode MS first for better coverage, then fallback to standard Arial
+        let font_paths = [
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/Library/Fonts/Arial.ttf"
+        ];
+
+        let mut font_data = None;
+        for path in font_paths {
+            if let Ok(data) = std::fs::read(path) {
+                font_data = Some(data);
+                break;
+            }
+        }
+
+        if let Some(data) = font_data {
+            fonts.font_data.insert(font_name.to_owned(), egui::FontData::from_owned(data));
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                vec.insert(0, font_name.to_owned());
+            }
+            if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+                vec.insert(0, font_name.to_owned());
+            }
+        }
+    }
+
     ctx.set_fonts(fonts);
 }
 
@@ -77,7 +123,7 @@ impl LocaleText {
                 hotkey_section: "Controls",
                 hotkey_label: "Activation Hotkey:",
                 restart_note: "Note: Restart app to apply hotkey changes.",
-                startup_label: "Run at Windows Startup",
+                startup_label: "Run at Startup",
                 fullscreen_note: "⚠ To use hotkey in fullscreen apps/games, run this app as Administrator.",
                 footer_note: "Press hotkey and select region to translate. Closing this window minimizes to System Tray.",
                 auto_copy_label: "Auto copy translation",
@@ -92,7 +138,7 @@ impl LocaleText {
                 hotkey_section: "Điều Khiển",
                 hotkey_label: "Phím Tắt Kích Hoạt:",
                 restart_note: "Lưu ý: Khởi động lại để áp dụng phím tắt mới.",
-                startup_label: "Khởi động cùng Windows",
+                startup_label: "Khởi động cùng hệ thống",
                 fullscreen_note: "⚠ Để sử dụng phím tắt trong các ứng dụng/trò chơi fullscreen, hãy chạy ứng dụng này dưới quyền Quản trị viên.",
                 footer_note: "Bấm hotkey và chọn vùng trên màn hình để dịch, tắt cửa sổ này thì ứng dụng sẽ tiếp tục chạy trong System Tray",
                 auto_copy_label: "Tự động copy bản dịch",
@@ -107,7 +153,7 @@ impl LocaleText {
                 hotkey_section: "단축키 설정",
                 hotkey_label: "활성화 키:",
                 restart_note: "참고: 단축키 변경은 앱을 재시작해야 적용됩니다.",
-                startup_label: "Windows 시작 시 실행",
+                startup_label: "시작 시 실행",
                 fullscreen_note: "⚠ 풀스크린 앱/게임에서 단축키를 사용하려면 관리자 권한으로 이 앱을 실행하세요.",
                 footer_note: "단축키를 눌러 번역할 영역을 선택하세요. 창을 닫으면 트레이에서 실행됩니다.",
                 auto_copy_label: "번역 자동 복사",
@@ -145,6 +191,7 @@ impl SettingsApp {
         let auto = AutoLaunch::new(
             app_name,
             app_path.to_str().unwrap(),
+            false, // use_launch_agent (macOS specific)
             args,
         );
 
@@ -161,55 +208,58 @@ impl SettingsApp {
             }
         });
 
-        // Spawn thread to wait for inter-process restore event
-        let _tx_restore = tx.clone();
-        let ctx_restore = ctx.clone();
-        std::thread::spawn(move || {
-            loop {
-                unsafe {
-                    // Try to open existing event (created by main.rs)
-                    match OpenEventW(EVENT_ALL_ACCESS, false, w!("ScreenGroundedTranslatorRestoreEvent")) {
-                        Ok(event_handle) => {
-                            // Wait for the event to be signaled (infinite wait)
-                            let result = WaitForSingleObject(event_handle, INFINITE);
-                            
-                            // Event was signaled
-                            if result == WAIT_OBJECT_0 {
-                                // Restore the window using Windows API directly
-                                // (same as tray menu does, works even if UI loop isn't running)
-                                let class_name = w!("eframe");
-                                let mut hwnd = FindWindowW(PCWSTR(class_name.as_ptr()), None);
+        // Spawn thread to wait for inter-process restore event (Windows only)
+        #[cfg(target_os = "windows")]
+        {
+            let _tx_restore = tx.clone();
+            let ctx_restore = ctx.clone();
+            std::thread::spawn(move || {
+                loop {
+                    unsafe {
+                        // Try to open existing event (created by main.rs)
+                        match OpenEventW(EVENT_ALL_ACCESS, false, w!("ScreenGroundedTranslatorRestoreEvent")) {
+                            Ok(event_handle) => {
+                                // Wait for the event to be signaled (infinite wait)
+                                let result = WaitForSingleObject(event_handle, INFINITE);
                                 
-                                if hwnd.0 == 0 {
-                                    let title = w!("Screen Grounded Translator");
-                                    hwnd = FindWindowW(None, PCWSTR(title.as_ptr()));
+                                // Event was signaled
+                                if result == WAIT_OBJECT_0 {
+                                    // Restore the window using Windows API directly
+                                    // (same as tray menu does, works even if UI loop isn't running)
+                                    let class_name = w!("eframe");
+                                    let mut hwnd = FindWindowW(PCWSTR(class_name.as_ptr()), None);
+                                    
+                                    if hwnd.0 == 0 {
+                                        let title = w!("Screen Grounded Translator");
+                                        hwnd = FindWindowW(None, PCWSTR(title.as_ptr()));
+                                    }
+                                    
+                                    if hwnd.0 != 0 {
+                                        ShowWindow(hwnd, SW_RESTORE);
+                                        ShowWindow(hwnd, SW_SHOW);
+                                        SetForegroundWindow(hwnd);
+                                        SetFocus(hwnd);
+                                    }
+                                    
+                                    // Also set the signal for the UI loop in case it's running
+                                    RESTORE_SIGNAL.store(true, Ordering::SeqCst);
+                                    ctx_restore.request_repaint();
+                                    
+                                    // Reset the manual-reset event for the next signal
+                                    let _ = ResetEvent(event_handle);
                                 }
                                 
-                                if hwnd.0 != 0 {
-                                    ShowWindow(hwnd, SW_RESTORE);
-                                    ShowWindow(hwnd, SW_SHOW);
-                                    SetForegroundWindow(hwnd);
-                                    SetFocus(hwnd);
-                                }
-                                
-                                // Also set the signal for the UI loop in case it's running
-                                RESTORE_SIGNAL.store(true, Ordering::SeqCst);
-                                ctx_restore.request_repaint();
-                                
-                                // Reset the manual-reset event for the next signal
-                                let _ = ResetEvent(event_handle);
+                                let _ = CloseHandle(event_handle);
                             }
-                            
-                            let _ = CloseHandle(event_handle);
-                        }
-                        Err(_) => {
-                            // Event doesn't exist yet, wait a bit and retry
-                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            Err(_) => {
+                                // Event doesn't exist yet, wait a bit and retry
+                                std::thread::sleep(std::time::Duration::from_millis(100));
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         let tx_menu = tx.clone();
         let ctx_menu = ctx.clone();
@@ -221,8 +271,8 @@ impl SettingsApp {
                         std::process::exit(0);
                     }
                     "1002" => {
-                        // RESTORE - use Windows API to restore window directly
-                        // This works even if the UI loop isn't running
+                        // RESTORE
+                        #[cfg(target_os = "windows")]
                         unsafe {
                             // Find main window by class name
                             let class_name = w!("eframe");
@@ -289,6 +339,24 @@ impl SettingsApp {
 
 impl eframe::App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // macOS Overlay Integration
+        #[cfg(target_os = "macos")]
+        {
+            // Ensure ctx is stored
+            {
+                let mut app = self.app_state_ref.lock().unwrap();
+                if app.egui_ctx.is_none() {
+                    app.egui_ctx = Some(ctx.clone());
+                }
+            }
+            
+            // Check if we need to show overlay
+            let show = self.app_state_ref.lock().unwrap().show_overlay;
+            if show {
+                overlay_gui::show_overlay(ctx);
+            }
+        }
+
         // Check if restore signal was set by tray thread
         if RESTORE_SIGNAL.swap(false, Ordering::SeqCst) {
             self.restore_window(ctx);
@@ -474,7 +542,7 @@ impl eframe::App for SettingsApp {
     }
 
     // Clean exit handler
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         // Explicitly hide/remove the tray icon on exit
         self.tray_icon = None;
     }

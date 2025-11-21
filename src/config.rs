@@ -52,18 +52,26 @@ impl Default for Config {
 }
 
 fn is_system_dark_mode() -> bool {
-    // Check Windows registry for AppsUseLightTheme (0 = dark, 1 = light)
-    use winreg::RegKey;
-    use winreg::enums::HKEY_CURRENT_USER;
-    
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    match hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize") {
-        Ok(key) => {
-            key.get_value::<u32, _>("AppsUseLightTheme")
-                .map(|val| val == 0)
-                .unwrap_or(true) // Default to dark if can't read
+    #[cfg(target_os = "windows")]
+    {
+        // Check Windows registry for AppsUseLightTheme (0 = dark, 1 = light)
+        use winreg::RegKey;
+        use winreg::enums::HKEY_CURRENT_USER;
+        
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        match hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize") {
+            Ok(key) => {
+                key.get_value::<u32, _>("AppsUseLightTheme")
+                    .map(|val| val == 0)
+                    .unwrap_or(true) // Default to dark if can't read
+            }
+            Err(_) => true, // Default to dark
         }
-        Err(_) => true, // Default to dark
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // TODO: Implement for macOS/Linux if needed. For now default to dark or light.
+        false 
     }
 }
 
