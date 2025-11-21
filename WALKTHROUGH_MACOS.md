@@ -42,3 +42,9 @@ Khi chạy lần đầu, macOS sẽ yêu cầu các quyền sau:
 *   **Phím tắt mặc định**: Phím `~` (ngay dưới phím Esc).
 *   **Dịch**: Nhấn `~`, màn hình sẽ tối đi. Kéo chuột để chọn vùng văn bản cần dịch. Kết quả sẽ hiện ra ngay lập tức.
 *   **Cài đặt**: Ứng dụng chạy ngầm dưới khay hệ thống (System Tray) trên thanh Menu Bar. Click vào icon để mở cài đặt hoặc thoát.
+
+## Demo on macOS
+
+<div align="center">
+  <img src="docs/images/demo-macos.gif" width="100%" alt="Screen Grounded Translator Demo" />
+</div>
