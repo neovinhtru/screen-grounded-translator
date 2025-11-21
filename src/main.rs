@@ -18,6 +18,22 @@ use config::{Config, load_config};
 use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItem}};
 use platform::{setup_platform, spawn_hotkey_listener};
 
+#[derive(Clone, Debug)]
+pub enum TranslationStatus {
+    Translating,
+    Success,
+    Error,
+}
+
+#[derive(Clone, Debug)]
+pub struct TranslationItem {
+    pub id: usize,
+    pub selection_rect: eframe::egui::Rect,
+    pub text: String,
+    pub status: TranslationStatus,
+    pub copy_feedback_time: Option<std::time::Instant>,
+}
+
 pub struct AppState {
     pub config: Config,
     pub original_screenshot: Option<ImageBuffer<image::Rgba<u8>, Vec<u8>>>,
@@ -26,13 +42,16 @@ pub struct AppState {
     // macOS Overlay State
     pub show_overlay: bool,
     pub egui_ctx: Option<eframe::egui::Context>,
-    pub selection_rect: Option<eframe::egui::Rect>,
-    pub translation_result: Option<String>,
+    
+    // Multi-selection support
+    pub translation_items: Vec<TranslationItem>,
+    pub current_selection: Option<eframe::egui::Rect>,
+    pub next_item_id: usize,
+    
     pub monitor_scale_factor: f32,
     pub overlay_origin: (i32, i32),
     pub overlay_geometry: Option<(u32, u32)>,
     pub screens: Vec<ScreenRect>,
-    pub copy_feedback_time: Option<std::time::Instant>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -52,13 +71,15 @@ lazy_static! {
         model_selector: model_config::ModelSelector::new(model_config::USE_MODEL_ROTATION),
         show_overlay: false,
         egui_ctx: None,
-        selection_rect: None,
-        translation_result: None,
+        
+        translation_items: Vec::new(),
+        current_selection: None,
+        next_item_id: 0,
+        
         monitor_scale_factor: 1.0,
         overlay_origin: (0, 0),
         overlay_geometry: None,
         screens: Vec::new(),
-        copy_feedback_time: None,
     }));
 }
 
